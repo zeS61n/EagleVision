@@ -1,0 +1,14 @@
+name: SAOLoad
+main: com.SAOPJ.EquipmentLoad.Main
+version: 1.0
+author: DoloSaber
+commands:
+  FUZHONG:
+    description: 查看当前负重值！
+    usage: /FUZHONG
+    aliases: fz
+    permission: Dolo.useFUZHONG
+    permission-message: §c无权执行！
+permissions:
+  Dolo.useFUZHONG:
+    default: op
