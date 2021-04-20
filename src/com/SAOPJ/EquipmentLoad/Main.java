@@ -7,9 +7,13 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryAction;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -26,11 +30,15 @@ public class Main extends JavaPlugin implements Listener{
 			saveDefaultConfig();
 			getServer().getPluginManager().registerEvents(new ArmorListener(getConfig().getStringList("blocked")), this);
 			Bukkit.getServer().getPluginManager().registerEvents(this, this);
+			
+			//获取在线玩家负重/
 			getLogger().info("插件已加载");
 		}
 		
 		public void onDisable()
 		{
+			PlayerLoad.clear();
+			mainHandNum.clear();
 			getLogger().info("插件已卸载");
 		}
 		
@@ -45,12 +53,116 @@ public class Main extends JavaPlugin implements Listener{
 				}
 				
 				Player player = (Player)sender;
-				int load = PlayerLoad.get(player.getName());
+				int load = getPlayerLoad(player.getName());
 				String message = this.getConfig().getString("fuzhongMessage");
-				sender.sendMessage( message + load);		
+				@SuppressWarnings("deprecation")
+				String loadLimit = String.valueOf(player.getMaxHealth()/2);
+				sender.sendMessage( message + load + "/" + loadLimit );		
 				return true;
 			}
 			return false;
+		}
+		
+		
+		
+		//玩家登陆时 会同时出发PlayerItemHeldEvent事件
+		//当玩家上线重新计算负重/*/*/*获取手持负重   且    做成方法
+		HashMap<String,Integer> PlayerLoad = new HashMap<String, Integer>();
+		@EventHandler(ignoreCancelled=true)
+		public void onPlayerOnline(PlayerJoinEvent event){
+			Player player = event.getPlayer();
+			
+			int load = 0;
+			
+			if(player.getInventory().getHelmet() != null){
+				load = load + getLoad(player.getInventory().getHelmet());
+			}
+			if(player.getInventory().getChestplate() != null){
+				load = load + getLoad(player.getInventory().getChestplate());
+			}
+			if(player.getInventory().getLeggings() != null){
+				load = load + getLoad(player.getInventory().getLeggings());
+			}
+			if(player.getInventory().getBoots() != null){
+				load = load + getLoad(player.getInventory().getBoots());
+			}
+//			int i = mainHandNum.get(player.getName());
+//			player.sendMessage(String.valueOf(i));
+//			if(player.getInventory().getItem(mainHandNum.get(player.getName()).intValue()) != null ){
+//				
+//				load = load + getLoad(player.getInventory().getItem(mainHandNum.get(player.getName()).intValue()));
+//			}
+			PlayerLoad.put(player.getName(), load);
+			setLoad(player, load);
+			
+			//PlayerItemHeldEvent事件显示message
+			//player.sendMessage("online你当前装备负重： " + load);
+		}
+		
+		
+		
+		//检测快捷栏切换时手持武器负重
+		HashMap<String,Integer> mainHandNum = new HashMap<String,Integer>();
+		@EventHandler(ignoreCancelled=true)
+		public void onHeldItem(PlayerItemHeldEvent event){
+			Player player = event.getPlayer();
+			
+			//空手 换 道具
+			int slot = event.getNewSlot();
+			int oldSlot = event.getPreviousSlot();
+			int load = PlayerLoad.get(player.getName());
+			
+			if(player.getInventory().getItem(oldSlot) == null && player.getInventory().getItem(slot) != null ){
+				ItemStack item = player.getInventory().getItem(slot);
+				
+				int newLoad = getLoad(item);
+				load = load + newLoad;
+				
+				//player.sendMessage("空手 换 道具");
+			}
+			
+			//当 道具 切换 空手 时
+			else if(player.getInventory().getItem(oldSlot) != null && player.getInventory().getItem(slot) == null ){
+				
+				ItemStack item = player.getInventory().getItem(oldSlot);
+				
+				int OldLoad = getLoad(item);
+				load = load - OldLoad;
+				
+				//player.sendMessage("当 道具 切换 空手 时");
+			}
+			
+			//当  道具  切换  道具  时
+			else if(player.getInventory().getItem(oldSlot) != null && player.getInventory().getItem(slot) != null && !player.getInventory().getItem(oldSlot).equals(player.getInventory().getItem(slot))){
+				
+				ItemStack item = player.getInventory().getItem(slot);
+				ItemStack oldItem = player.getInventory().getItem(oldSlot);
+				
+				int newLoad = getLoad(item);
+				int oldLoad = getLoad(oldItem);
+				load = load - oldLoad + newLoad;
+				
+				//player.sendMessage("当  道具  切换  道具  时");
+			}
+			else if(player.getInventory().getItem(oldSlot) != null && player.getInventory().getItem(slot) != null && player.getInventory().getItem(oldSlot).equals(player.getInventory().getItem(slot))){
+				ItemStack item = player.getInventory().getItem(slot);
+				
+				int newLoad = getLoad(item);
+				load = load + newLoad;
+				
+				//player.sendMessage("online时记录主手道具负重值");
+				
+			}
+			else{
+				player.sendMessage("onHeldItem:else");
+				mainHandNum.put(player.getName(), slot);
+				return;
+			}
+			player.sendMessage("记录主手位： " + String.valueOf(slot));
+			mainHandNum.put(player.getName(), slot);
+			PlayerLoad.put(player.getName(), load);
+			setLoad(player,load);
+			player.sendMessage("你当前装备负重： " + load);
 		}
 		
 		
@@ -63,8 +175,12 @@ public class Main extends JavaPlugin implements Listener{
 			
 			//穿上装备  原本无装备
 			if(event.getNewArmorPiece() != null && event.getNewArmorPiece().getType() != Material.AIR && (event.getOldArmorPiece() == null || event.getOldArmorPiece().getType() == Material.AIR)){
-				int NewLoad = getLoad(event.getNewArmorPiece());
-				load = load + NewLoad;
+				
+				event.getPlayer().sendMessage(event.getMethod().name());
+				if(!event.getMethod().name().equals("HOTBAR")){
+					int NewLoad = getLoad(event.getNewArmorPiece());
+					load = load + NewLoad;
+				}
 			}
 			
 			//穿上装备  原本有装备
@@ -85,36 +201,63 @@ public class Main extends JavaPlugin implements Listener{
 			}
 			PlayerLoad.put(event.getPlayer().getName(), load);
 			setLoad(event.getPlayer(), load);
-			//event.getPlayer().sendMessage("你当前装备负重：" + load);
+			event.getPlayer().sendMessage("你当前装备负重：" + load);
 		}
 		
 
 		
-		//当玩家上线重新计算负重
-		HashMap<String,Integer> PlayerLoad = new HashMap<String, Integer>();
+		//检测打开背包 点击换道具到主手的事件
+		//List<Integer> hotBarSlots = new ArrayList<Integer>(Arrays.asList(36,37,38,39,40,41,42,43,44));
 		@EventHandler(ignoreCancelled=true)
-		public void onPlayerOnline(PlayerJoinEvent event){
-			Player player = event.getPlayer();
-			
-			int load = 0;
-			
-			if(player.getInventory().getHelmet() != null){
-				load = load + getLoad(player.getInventory().getHelmet());
+		public void onSwapItemToHotBar(InventoryClickEvent event){
+			if(event.getWhoClicked().getType() == EntityType.PLAYER ){
+				Player player = (Player)event.getWhoClicked();
+				
+				
+//				player.sendMessage("click:" + event.getClick().toString());
+//				player.sendMessage("action" + event.getAction().toString());
+				
+				
+				
+//				boolean isHotBar = false;
+//				for(int i : hotBarSlots){
+//					if(event.getRawSlot() == i){
+//						isHotBar = true;
+//					}
+//				}
+				//检测是否主手
+				//player.sendMessage("rawSlot: " + event.getSlot());
+				//player.sendMessage("mainHandNum: " + mainHandNum.get(player.getName()));
+				if(event.getSlot() == mainHandNum.get(player.getName())){
+					//空手 换 道具 
+					if(event.getAction() == InventoryAction.PLACE_ALL){
+						player.sendMessage("place");
+						ItemStack item = event.getCursor();
+						player.sendMessage(item.getItemMeta().getDisplayName());
+						int load = getLoad(item);
+						
+					}
+					
+					//道具 换 空手
+					if(event.getAction() == InventoryAction.PICKUP_ALL){
+						player.sendMessage("pick");
+					}
+					
+					//道具  换  道具
+					if(event.getAction() == InventoryAction.SWAP_WITH_CURSOR){
+						player.sendMessage("swap");
+					}
+				}
+
+				
 			}
-			if(player.getInventory().getChestplate() != null){
-				load = load + getLoad(player.getInventory().getChestplate());
-			}
-			if(player.getInventory().getLeggings() != null){
-				load = load + getLoad(player.getInventory().getLeggings());
-			}
-			if(player.getInventory().getBoots() != null){
-				load = load + getLoad(player.getInventory().getBoots());
-			}
-			
-			PlayerLoad.put(player.getName(), load);
-			setLoad(player, load);
-			//player.sendMessage("你当前装备负重： " + load);
+				
 		}
+		
+		
+		
+		
+
 		
 		
 		
@@ -133,6 +276,7 @@ public class Main extends JavaPlugin implements Listener{
 			}
 			return 0;
 		}
+		
 		
 		
 		//超负重惩罚
@@ -154,85 +298,12 @@ public class Main extends JavaPlugin implements Listener{
 		}
 		
 		
+	
 		
-		/*
-		public class ItemInfo extends JavaPlugin{
-			@Override
-			public void onEnable(){
-				getLogger().info("物品信息插件加载完毕");
-			}
-			public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-				if(label.equalsIgnoreCase("iteminfo")){
-					if(sender instanceof Player){
-						Player player = (Player)sender;
-						if(args.length==0){
-							player.sendMessage("§a/iteminfo meta 获取手上物品的信息");
-							return true;
-						}else{
-							if(args[0].equalsIgnoreCase("meta")){
-								//返回玩家手中的物品信息
-								getItemInfo(player,player.getItemInHand());
-								return true;
-							}
-						}
-					}
-				}
-				return false;
-			}
-			@SuppressWarnings("deprecation")
-			public void getItemInfo(Player player,ItemStack item){
-				//接下来就来获取所有信息了。
-				if(item==null){
-					player.sendMessage("§c你手上没有任何物品!");
-					return;
-				}
-				int id,amount;
-				short durability;
-				byte data;
-				String displayName;
-				List<String> lore = new ArrayList<String>();
-				Map<Enchantment, Integer> ench = new HashMap<Enchantment, Integer>();
-				id = item.getTypeId();//获取ID
-				amount = item.getAmount();//获取数量
-				durability = item.getDurability();//获取损坏程度
-				data = item.getData().getData();//获取data
-				if(item.getItemMeta().hasDisplayName()){//判断是否设置名称
-					displayName = item.getItemMeta().getDisplayName();
-				}else{
-					displayName = "没有修改名称";
-				}
-				lore = item.getItemMeta().getLore();
-				ench = item.getItemMeta().getEnchants();
-				player.sendMessage("§a物品 I D:§6"+id);
-				player.sendMessage("§a物品数量:§6"+amount);
-				player.sendMessage("§a物品损坏:§6"+durability);
-				player.sendMessage("§a物品种类:§6"+data);
-				player.sendMessage("§a物品名称:§6"+displayName);
-				if(item.getItemMeta().hasEnchants()){
-					player.sendMessage("§a物品附魔:");
-					for(Enchantment e : ench.keySet()){
-						player.sendMessage("§a附魔ID:§6"+e.getId()+"§a,附魔等级:§6"+ench.get(e));
-					}
-				}else{
-					player.sendMessage("§a物品附魔:§6没有附魔");
-				}
-				if(item.getItemMeta().hasLore()){
-					player.sendMessage("§a物品Lore:");
-					for(String l : lore){
-						player.sendMessage("§aLore:§f"+l);
-					}
-				}else{
-					player.sendMessage("§a物品Lore:§6没有lore信息");
-				}
-			}
-			@Override
-			public void onDisable(){
-				getLogger().info("物品信息插件卸载完毕");
-			}
+		//查询当前负重值接口
+		public int getPlayerLoad(String name){
+			return PlayerLoad.get(name);
 		}
-		
-		*/
-		
 		
 		
 		
