@@ -1,6 +1,15 @@
-overLoadMessage: "&e[&aSAOPJLoad&e] &4你已经超出负重了！"
+#################################
+#   SAOPJ 负重检测系统 Ver1.0   #
+#################################
+
+#debug模式包括各种反馈信息与超负重时的减速buff
+debugMode: false
+onDebugMessage: "&c[SAOPJLoad]&a开启Debug模式！"
+offDebugMessage: "&c[SAOPJLoad]&a关闭Debug模式！"
+#检测的字段
 loreCheck: "重量："
 fuzhongMessage: "当前装备负重："
+overLoadMessage: "&c[SAOPJLoad]&a你已经超出负重了！"
 # All blocks with an inventory or any blocks that when right clicked shouldn't equip armor.
 blocked:
     - FURNACE

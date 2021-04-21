@@ -4,11 +4,11 @@ version: 1.0
 author: DoloSaber
 commands:
   FUZHONG:
-    description: 查看当前负重值！
-    usage: /FUZHONG
+    description: 查看当前负重值/开启debug模式！
+    usage: /fuzhong [debug]
     aliases: fz
-    permission: Dolo.useFUZHONG
+    permission: Load.useFUZHONG
     permission-message: §c无权执行！
 permissions:
-  Dolo.useFUZHONG:
+  Load.useFUZHONG:
     default: op
