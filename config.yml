@@ -8,8 +8,13 @@ onDebugMessage: "&c[SAOPJLoad]&a开启Debug模式！"
 offDebugMessage: "&c[SAOPJLoad]&a关闭Debug模式！"
 #检测的字段
 loreCheck: "重量："
+#指令/fz的信息文字
 fuzhongMessage: "当前装备负重："
+#负重超载后的系统提示信息
 overLoadMessage: "&c[SAOPJLoad]&a你已经超出负重了！"
+#指令/fz [player]的信息文字
+pfzMessage: "&c[SAOPJLoad]&a玩家&f%player&a的负重值为： "
+pfzNoOlineMessage: "&c[SAOPJLoad]&4该玩家不在线！"
 # All blocks with an inventory or any blocks that when right clicked shouldn't equip armor.
 blocked:
     - FURNACE
