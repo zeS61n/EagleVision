@@ -1,14 +1,15 @@
-name: SAOLoad
-main: com.SAOPJ.EquipmentLoad.Main
+name: EagleVision
+main: com.Dolo.EagleVision.Main
 version: 1.0
-author: DoloSaber
+author: DoloC8
+depend: [ProtocolLib]
 commands:
-  FUZHONG:
-    description: 查看当前负重值/开启debug模式！
-    usage: /fuzhong [debug]
-    aliases: fz
-    permission: Load.useFUZHONG
+  EagleVision:
+    description: 开启鹰眼！
+    usage: /EagleVision 
+    aliases: ev
+    permission: ev.useEagleVision
     permission-message: §c无权执行！
 permissions:
-  Load.useFUZHONG:
+  ev.useEagleVision:
     default: op
