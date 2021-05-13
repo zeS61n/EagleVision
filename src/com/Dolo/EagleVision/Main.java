@@ -1,54 +1,65 @@
 package com.Dolo.EagleVision;
 
-import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.Configuration;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 
-import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher.Registry;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher.Serializer;
 
+//set which type block can ignore and lock
+//蓄力 title进度条 致盲 粒子圈圈 发光标记
+//末影之眼 shift右键 打开Gui 加入map<list（）>
 public class Main extends JavaPlugin implements Listener{
 	
+	public Configuration mesConfig;
 	ProtocolManager pm;
 	Map<String,Boolean> isEVMap = new HashMap<String,Boolean>();
+	Map<String,List<String>> shareMap = new HashMap<String,List<String>>();
 	
 	@Override
 	public void onEnable()
 	{
+		this.saveDefaultConfig();
+		FileConfig.saveDefaultConfig(this, "message.yml");
+		this.mesConfig = FileConfig.load(this, "message.yml");
 		Bukkit.getServer().getPluginManager().registerEvents(this, this);
 		pm = ProtocolLibrary.getProtocolManager();
 		for (Player player : Bukkit.getServer().getOnlinePlayers()) {
 		    isEVMap.put(player.getName(), false);
+		    List<String> playerNames = new ArrayList<String>();
+		    shareMap.put(player.getName(), playerNames);
 		}
-		getLogger().info("插件已加载");
+		getLogger().info("插件已加载喵");
 	}
 	
 	public void onDisable()
 	{
 		pm = ProtocolLibrary.getProtocolManager();
 		pm.getPacketListeners().forEach( e -> pm.removePacketListener(e));
-		getLogger().info("插件已卸载");
+		getLogger().info("插件已卸载喵");
 		
 	}
 	
@@ -58,7 +69,7 @@ public class Main extends JavaPlugin implements Listener{
 		{
 			if (!(sender instanceof Player))
 			{
-				sender.sendMessage("控制台无法执行");
+				sender.sendMessage("§c控制台无法执行的哦！");
 				return true;
 			}
 			
@@ -67,15 +78,34 @@ public class Main extends JavaPlugin implements Listener{
 				/****开启鹰眼模式****/
 				if(!isEVMap.get(p.getName())){
 					isEVMap.put(p.getName(), true);
-					sender.sendMessage("开启鹰眼！");
+					
+					String onVision = this.mesConfig.getString("onVision").replace("&","§");
+					sender.sendMessage(onVision);
 					return true;
 				}
 				else if(isEVMap.get(p.getName())){
 					isEVMap.put(p.getName(), false);
-					sender.sendMessage("关闭鹰眼！");
+					String offVision = this.mesConfig.getString("offVision").replace("&","§");
+					sender.sendMessage(offVision);
 					return true;
+				}	
+			}
+			//查询共享玩家
+			if(args.length == 1 && args[0].equalsIgnoreCase("list")){
+				String list = "";
+				for(String pn : shareMap.get(p.getName())){
+					list = list + pn + " , ";
 				}
-				
+				String checkSharePlayers = this.mesConfig.getString("checkSharePlayers").replace("&","§");
+				sender.sendMessage(checkSharePlayers + list);
+				return true;
+			}
+			if(args.length == 1 && args[0].equalsIgnoreCase("near")){
+				List<Entity> tagEntities = p.getNearbyEntities(5, 5, 5);
+				for(Entity en : tagEntities){
+					AddGlowing.addGlow(this, pm, p, en, shareMap);
+				}
+				return true;
 			}
 			
 			return false;
@@ -83,58 +113,85 @@ public class Main extends JavaPlugin implements Listener{
 		return false;
 	}
 	
-	
-	@EventHandler//(ignoreCancelled=true)
+	//标记
+	@EventHandler(priority = EventPriority.NORMAL)//(ignoreCancelled=true)
 	public void onPlayerClickEntity(PlayerInteractEvent e){
 		
 		Player p = e.getPlayer();
-		e.getPlayer().sendMessage(e.getAction().toString());
+		//e.getPlayer().sendMessage(e.getAction().toString());
 		
 		if(!p.isSneaking()) return;
+		if(e.getAction().equals(Action.PHYSICAL)) return;
+			
+		//保护我方末影之眼
+		if(e.getAction().equals(Action.RIGHT_CLICK_AIR)|| e.getAction().equals(Action.RIGHT_CLICK_BLOCK))
+			if(p.getItemInHand().getType().equals(Material.EYE_OF_ENDER))
+				e.setCancelled(true);
+		
 		if(!isEVMap.get(p.getName())) return;
-		if(e.getAction().equals(Action.LEFT_CLICK_AIR)){
-			Entity entity = getCursorTarget(e.getPlayer(), 10);
-			
-			if(entity == null){
-				e.getPlayer().sendMessage( "无标记");
-				return;
-			}
-			
-			addGlow(e.getPlayer(),entity);
-			e.getPlayer().sendMessage( "标记：" + entity.getType().toString());
+		
+		double range = 20;
+		try {
+			range =  Double.parseDouble(this.getConfig().getString("tag range"));
+	    } catch (Exception ex) {
+	        ex.printStackTrace();
+	    }
+		
+		Entity entity = getCursorTarget(e.getPlayer(), range);
+		
+		if(entity == null){
+			//e.getPlayer().sendMessage( "无标记");
 			return;
 		}
+		
+		AddGlowing.addGlow(this, pm, e.getPlayer(),entity, shareMap);
+		//e.getPlayer().sendMessage( "标记：" + entity.getType().toString());
+		return;
 	}
+	
+	
+	
+	//共享
+	@EventHandler(priority = EventPriority.NORMAL)
+	public void onPlayerClickPlayer(PlayerInteractEntityEvent e){
+		Player p = e.getPlayer();
+		
+		if(!p.isSneaking()) return;
+		if(!e.getRightClicked().getType().equals(EntityType.PLAYER)) return;
+		if(!p.getItemInHand().getType().equals(Material.EYE_OF_ENDER)) return;
+		
+		for(String pn : shareMap.get(p.getName())){
+			if(pn.equalsIgnoreCase(e.getRightClicked().getName())){
+				p.sendMessage("已存在");
+				return;
+			}
+		}
+		shareMap.get(p.getName()).add(e.getRightClicked().getName());
+		shareMap.get(e.getRightClicked().getName()).add(p.getName());
+		e.getPlayer().sendMessage(e.getHand().toString());
+	}
+	
+	
 	
 	@EventHandler(ignoreCancelled=true)
 	public void onPlayerOnline(PlayerJoinEvent e){
 		isEVMap.put(e.getPlayer().getName(), false);
+		List<String> playerNames = new ArrayList<String>();
+		shareMap.put(e.getPlayer().getName(), playerNames);
 	}
 	
-	
-	public void addGlow(Player player , Entity en) {
-	    PacketContainer packet = pm.createPacket(PacketType.Play.Server.ENTITY_METADATA);
-	    packet.getIntegers().write(0, en.getEntityId()); //Set packet's entity id
-	    WrappedDataWatcher watcher = new WrappedDataWatcher(); //Create data watcher, the Entity Metadata packet requires this
-	    Serializer serializer = Registry.get(Byte.class); //Found this through google, needed for some stupid reason
-	    watcher.setEntity(player); //Set the new data watcher's target
-	    watcher.setObject(0, serializer, (byte) (0x40)); //Set status to glowing, found on protocol page
-	    packet.getWatchableCollectionModifier().write(0, watcher.getWatchableObjects()); //Make the packet's datawatcher the one we created
-	    try {
-	        pm.sendServerPacket(player, packet);
-	    } catch (InvocationTargetException e) {
-	        e.printStackTrace();
-	    }
-	}
-	
-	
+	//检测鼠标指针上的生物
+	//Code from http://www.mcbbs.net/thread-773838-1-1.html
 	public Entity getCursorTarget(Player p, double range){
         Entity target;
         Iterator<Entity> entities;
         Location loc = p.getEyeLocation();
         Vector vec = loc.getDirection().multiply(0.15);
-        Block block;
-        while( ((range-=0.1)>0) && ((block = loc.getWorld().getBlockAt(loc)).isLiquid() || block.isEmpty()) ){
+        Block block = null;
+        List<String> igBlock = this.getConfig().getStringList("ignored block");
+        //p.sendMessage(igBlock.toString());
+        
+        while( ((range-=0.1)>0) && ((block = loc.getWorld().getBlockAt(loc)).isLiquid() || block.isEmpty()) || igBlock.toString().contains(block.getType().toString()) ){
         	entities = loc.getWorld().getNearbyEntities(loc.add(vec), 0.001, 0.001, 0.001).iterator();
 	        while(entities.hasNext()){
 	        	if((target = entities.next()) != p){
@@ -161,7 +218,7 @@ public class Main extends JavaPlugin implements Listener{
 	
 	
 	
-	
+
 	
 	
 	/*test for GlowAPI
@@ -175,28 +232,6 @@ public class Main extends JavaPlugin implements Listener{
 	            GlowAPI.setGlowing(event.getPlayer(), GlowAPI.Color.DARK_AQUA, Bukkit.getOnlinePlayers());
 	        }
 	    }, 10);
-	}
-	*/
-	
-	/*error setGlowing
-	public void setGlowing(Player p , Entity en){
-		PacketContainer packet = pm.createPacket(PacketType.Play.Server.ENTITY_METADATA);
-		
-		packet.getIntegers().write(0,en.getEntityId());
-		packet.getmea
-		WrappedWatchableObject> Meradata = 
-		
-		packet.getIntegers().write(0, (int)en.getEntityId());	
-		packet.getBytes().write(0, (byte)(24&255));				
-		packet.getBytes().write(1, (byte)(0&255));				
-		packet.getIntegers().write(1, (int)100);				
-		packet.getBytes().write(2,(byte)1);						
-		
-		try{
-			pm.sendServerPacket(p, packet,false);
-		} catch (InvocationTargetException ex) {
-			ex.printStackTrace();
-		}
 	}
 	*/
 }
