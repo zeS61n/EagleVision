@@ -1,0 +1,16 @@
+#################################
+#  EagleVision 语言文件 Ver1.0  #
+#################################
+
+#开启鹰眼模式
+onVision: "&c[EagleVision]&a开启鹰眼！"
+
+#关闭鹰眼模式
+offVision: "&c[EagleVision]&a关闭鹰眼！"
+
+#查看与你共享标记的玩家
+checkSharePlayers: "&c[EagleVision]&a与你视觉共享的有："
+
+
+
+
